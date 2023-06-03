@@ -50,7 +50,7 @@ def preprocess(
 
 
 def loadDataset(size: int = 512) -> tf.data.Dataset:
-    raw_dataset = tf.data.TFRecordDataset("r3d.tfrecords")
+    raw_dataset = tf.data.TFRecordDataset("/cluster/scratch/amohap/data/tf2deep/tf2deep_train.tfrecords")
     parsed_dataset = raw_dataset.map(_parse_function)
     return parsed_dataset
 
