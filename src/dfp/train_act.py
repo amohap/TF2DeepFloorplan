@@ -9,14 +9,14 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tqdm import tqdm
 
-from .data import (
+from .data_act import (
     convert_one_hot_to_image,
     decodeAllRaw,
     loadDataset,
     preprocess,
 )
 from .loss import balanced_entropy, cross_two_tasks_weight
-from .net import deepfloorplanModel
+from .net import deepfloorplanModel, deepactivitiesfloorplanModel
 from .net_func import deepfloorplanFunc
 from .utils.settings import overwrite_args_with_toml
 
@@ -28,7 +28,10 @@ def init(
 ) -> Tuple[tf.data.Dataset, tf.keras.Model, tf.keras.optimizers.Optimizer]:
     dataset = loadDataset()
     if config.tfmodel == "subclass":
-        model = deepfloorplanModel(config=config)
+        if config.activities:
+            model = deepactivitiesfloorplanModel(config=config)
+        else:
+            model = deepfloorplanModel(config=config)
     elif config.tfmodel == "func":
         model = deepfloorplanFunc(config=config)
     os.system(f"mkdir -p {config.modeldir}")
@@ -57,34 +60,56 @@ def image_grid(
     logr: tf.Tensor,
     logcw: tf.Tensor,
 ) -> matplotlib.figure.Figure:
-    figure = plt.figure()
-    plt.subplot(2, 3, 1)
-    plt.imshow(img[0].numpy())
+    figure = plt.figure(figsize=(10,10))
+    plt.subplot(2, 4, 1)
+    plt.imshow(img[0, :, :, :3].numpy())  # only plot first 3 channels as the original image
+    plt.title("Image")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 3, 2)
-    plt.imshow(bound[0].numpy())
+    plt.subplot(2, 4, 2)
+    plt.imshow(img[0, :, :, 3:4].numpy().squeeze(), cmap='gray')  # plot the "act_door" activity
+    plt.title("Act_door")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 3, 3)
-    plt.imshow(room[0].numpy())
+    plt.subplot(2, 4, 3)
+    plt.imshow(img[0, :, :, 4:5].numpy().squeeze(), cmap='gray')  # plot the "act_sitt" activity
+    plt.title("Act_sitt")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 3, 5)
-    plt.imshow(convert_one_hot_to_image(logcw)[0].numpy().squeeze())
+    plt.subplot(2, 4, 4)
+    plt.imshow(img[0, :, :, 5:6].numpy().squeeze(), cmap='gray')  # plot the "act_lay" activity
+    plt.title("Act_lay")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 3, 6)
-    plt.imshow(convert_one_hot_to_image(logr)[0].numpy().squeeze())
+    plt.subplot(2, 4, 5)
+    plt.imshow(bound[0].numpy().squeeze(), cmap='gray')
+    plt.title("Boundary")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.subplot(2, 4, 6)
+    plt.imshow(room[0].numpy().squeeze(), cmap='gray')
+    plt.title("Room")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.subplot(2, 4, 7)
+    plt.imshow(convert_one_hot_to_image(logcw)[0].numpy().squeeze(), cmap='gray')
+    plt.title("Log CW")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.subplot(2, 4, 8)
+    plt.imshow(convert_one_hot_to_image(logr)[0].numpy().squeeze(), cmap='gray')
+    plt.title("Log R")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
     return figure
-
 
 @tf.function
 def train_step(
@@ -116,8 +141,9 @@ def main(config: argparse.Namespace):
     for epoch in range(config.epochs):
         print("[INFO] Epoch {}".format(epoch))
         for data in tqdm(list(dataset.shuffle(400).batch(config.batchsize))):
-            img, bound, room = decodeAllRaw(data)
-            img, bound, room, hb, hr = preprocess(img, bound, room)
+            img, bound, room, act_door, act_sitt, act_lay, act_wash, hb, hr = preprocess(
+                data['image'], data['boundary'], data['room'], data['act_door'], data['act_sitt'], data['act_lay'], data['act_wash']
+                )
             logits_r, logits_cw, loss, loss1, loss2 = train_step(
                 model, optim, img, hr, hb
             )
@@ -150,9 +176,10 @@ def parse_args(args: List[str]) -> argparse.Namespace:
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--wd", type=float, default=1e-5)
     p.add_argument("--epochs", type=int, default=1000)
-    p.add_argument("--logdir", type=str, default="log/store")
-    p.add_argument("--modeldir", type=str, default="model/store")
+    p.add_argument("--logdir", type=str, default="/cluster/scratch/amohap/data/tf2deep/activity/log/store")
+    p.add_argument("--modeldir", type=str, default="/cluster/scratch/amohap/data/tf2deep/activity/model/store")
     p.add_argument("--weight", type=str)
+    p.add_argument("--activities", action='store_true')
     p.add_argument("--save-tensor-interval", type=int, default=10)
     p.add_argument("--save-model-interval", type=int, default=20)
     p.add_argument("--tomlfile", type=str, default=None)

@@ -101,10 +101,10 @@ def post_process(
     rm_ind: np.ndarray, bd_ind: np.ndarray, shp: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
     hard_c = (bd_ind > 0).astype(np.uint8)
-    # region from room prediction
+    # reg. from room prediction
     rm_mask = np.zeros(rm_ind.shape)
     rm_mask[rm_ind > 0] = 1
-    # region from close wall line
+    # reg. from close wall line
     cw_mask = hard_c
     # regine close wall mask by filling the gap between bright line
     cw_mask = fill_break_line(cw_mask)
