@@ -2,20 +2,21 @@ import os
 import random
 from tf_record import *
 
-train_file = 'structured3d_activities_train.txt'
-test_file = 'structured3d_activities_test.txt'
+train_file = 'structured3d_activities_furn_train.txt'
+test_file = 'structured3d_activities_furn_test.txt'
 
 # debug
 if __name__ == '__main__':
     write_new_txt = True
     write_tf_record = True
     include_activities = True
+    include_furn = True
 
     if write_new_txt:
 
         # write the r3d_train.txt and r3d_test.txt
         # Specify your directory
-        directory = '/home/amohap/MT/code/t-mt-2023-FloorplanReconstruction-AdrianaMohap/source/trajectory_sampling/plots/tf2deep_act/'
+        directory = '/home/amohap/MT/code/t-mt-2023-FloorplanReconstruction-AdrianaMohap/source/trajectory_sampling/plots/tf2deep_act_furn/'
 
         # List all files in directory
         all_files = os.listdir(directory)
@@ -24,8 +25,10 @@ if __name__ == '__main__':
         scenes = {}
 
         # Order of the files for a scene
-        if include_activities:
+        if include_activities and not include_furn:
             order = ['', '_wall', '_close', '_rooms', '_close_wall', '_act_opening_door', '_act_sitting', '_act_laying', '_act_washing_hands']
+        elif include_activities and include_furn:
+            order = ['', '_wall', '_close', '_rooms', '_close_wall', '_furn', '_act_opening_door', '_act_sitting', '_act_laying', '_act_washing_hands']
         else:
             order = ['', '_wall', '_close', '_rooms', '_close_wall']
 
@@ -37,8 +40,10 @@ if __name__ == '__main__':
 
                 # If the scene number is not in the dictionary yet, add an empty list for it
                 if scene_num not in scenes:
-                    if include_activities:
+                    if include_activities and not include_furn:
                         scenes[scene_num] = [None]*9
+                    elif include_activities and include_furn:
+                        scenes[scene_num] = [None]*10
                     else:
                         scenes[scene_num] = [None]*5
 
@@ -48,8 +53,10 @@ if __name__ == '__main__':
                         scenes[scene_num][i] = directory + file_name
 
         # Only keep scenes that have exactly 5 files and no None entries
-        if include_activities:
+        if include_activities and not include_furn:
             full_scenes = {k: v for k, v in scenes.items() if len(v) == 9 and all(v)}
+        elif include_activities and include_furn:
+            full_scenes = {k: v for k, v in scenes.items() if len(v) == 10 and all(v)}
         else:
             full_scenes = {k: v for k, v in scenes.items() if len(v) == 5 and all(v)}
 
@@ -87,17 +94,21 @@ if __name__ == '__main__':
             print(paths[3]) # rooms
             print(paths[4]) # close_wall
             
-            if include_activities:
-                print(paths[5]) # act_door
-                print(paths[6]) # act_sitt
-                print(paths[7]) # act_laying
-                print(paths[8]) # act_washing
+            if include_activities and include_furn:
+                print(paths[5]) # furn
+                print(paths[6]) # act_door
+                print(paths[7]) # act_sitt
+                print(paths[8]) # act_laying
+                print(paths[9]) # act_washing
             
             break
         
-        if include_activities:
+        if include_activities and not include_furn:
             write_bd_rm_act_record(train_paths, name='tf2deep_act_train.tfrecords')
             write_bd_rm_act_record(test_paths, name='tf2deep_act_test.tfrecords')
+        elif include_activities and include_furn:
+            write_bd_rm_act_furn_record(train_paths, name='tf2deep_act_furn_train.tfrecords')
+            write_bd_rm_act_furn_record(test_paths, name='tf2deep_act_furn_test.tfrecords')
         else:
             write_bd_rm_record(train_paths, name='tf2deep_train.tfrecords')
             write_bd_rm_record(test_paths, name='tf2deep_test.tfrecords')

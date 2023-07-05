@@ -370,13 +370,95 @@ def load_bd_rm_act_images(path):
 
     return image, cw_ind, room_ind, d_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind
 
+def write_bd_rm_act_furn_record(paths, name='dataset.tfrecords'):
+## add activity images
+	writer = tf.io.TFRecordWriter(name)
+	
+	for i in tqdm(range(len(paths)), desc='Processing images', unit="image"):
+		# Load the image
+		image, cw_ind, room_ind, d_ind, furn, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind = load_bd_rm_act_furn_images(paths[i])
+
+		# Create a feature
+		feature = {'image': _bytes_feature(tf.compat.as_bytes(image.tostring())),
+					'boundary': _bytes_feature(tf.compat.as_bytes(cw_ind.tostring())),
+					'room': _bytes_feature(tf.compat.as_bytes(room_ind.tostring())),
+					'door': _bytes_feature(tf.compat.as_bytes(d_ind.tostring())),
+					'furn': _bytes_feature(tf.compat.as_bytes(furn.tostring())),
+					'act_door': _bytes_feature(tf.compat.as_bytes(act_door_ind.tostring())),
+					'act_sitt': _bytes_feature(tf.compat.as_bytes(act_sitt_ind.tostring())),
+					'act_lay': _bytes_feature(tf.compat.as_bytes(act_lay_ind.tostring())),
+					'act_wash': _bytes_feature(tf.compat.as_bytes(act_wash_ind.tostring()))}
+		
+		# Create an example protocol buffer
+		example = tf.train.Example(features=tf.train.Features(feature=feature))
+    
+		# Serialize to string and write on the file
+		writer.write(example.SerializeToString())
+    
+	writer.close()
+
+def load_bd_rm_act_furn_images(path):
+    paths = path.split('\t')
+
+    # Read images
+    image = cv2.imread(paths[0])
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    close = cv2.imread(paths[2], cv2.IMREAD_GRAYSCALE)
+
+    room = cv2.imread(paths[3])
+    room = cv2.cvtColor(room, cv2.COLOR_BGR2RGB)
+
+    close_wall = cv2.imread(paths[4], cv2.IMREAD_GRAYSCALE)
+    
+    furn = cv2.imread(paths[5])
+    furn = cv2.cvtColor(furn, cv2.COLOR_BGR2RGB)
+    
+    act_door = cv2.imread(paths[6], cv2.IMREAD_GRAYSCALE)
+    act_sitting = cv2.imread(paths[7], cv2.IMREAD_GRAYSCALE)
+    act_laying = cv2.imread(paths[8], cv2.IMREAD_GRAYSCALE)
+    act_washing = cv2.imread(paths[9], cv2.IMREAD_GRAYSCALE)
+    
+	# NOTE: imresize will rescale the image to range [0, 255], also cast data into uint8 or uint32
+    image = (resize(image, (512, 512)) * 255).astype(np.uint8)
+    close = (resize(close, (512, 512)) * 255).astype(np.uint8) / 255.
+    close_wall = (resize(close_wall, (512, 512)) * 255).astype(np.uint8) / 255.
+    room = (resize(room, (512, 512)) * 255).astype(np.uint8)
+    furn = (resize(furn, (512, 512)) * 255).astype(np.uint8)
+    act_door = (resize(act_door, (512, 512)) * 255).astype(np.uint8) / 255.
+    act_sitting = (resize(act_sitting, (512, 512)) * 255).astype(np.uint8) / 255.
+    act_laying = (resize(act_laying, (512, 512)) * 255).astype(np.uint8) / 255.
+    act_washing = (resize(act_washing, (512, 512)) * 255).astype(np.uint8) / 255.
+
+    room_ind = rgb2ind(room)
+    furn_ind = rgb2ind(furn, floorplan_furn_map)
+
+	# merge result
+    d_ind = (close>0.5).astype(np.uint8)
+    cw_ind = (close_wall>0.5).astype(np.uint8)
+    act_door_ind = (act_door>0.5).astype(np.uint8)
+    act_sitt_ind = (act_sitting>0.5).astype(np.uint8)
+    act_lay_ind = (act_laying>0.5).astype(np.uint8)
+    act_wash_ind = (act_washing>0.5).astype(np.uint8)
+
+    cw_ind[cw_ind==1] = 2
+    cw_ind[d_ind==1] = 1
+
+	# make sure the dtype is uint8
+    image = image.astype(np.uint8)
+    room_ind = room_ind.astype(np.uint8)
+    furn_ind = furn_ind.astype(np.uint8)
+    cw_ind = cw_ind.astype(np.uint8)
+
+    return image, cw_ind, room_ind, d_ind, furn_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind
+
 def write_bd_rm_act_record(paths, name='dataset.tfrecords'):
 ## add activity images
 	writer = tf.io.TFRecordWriter(name)
 	
 	for i in tqdm(range(len(paths)), desc='Processing images', unit="image"):
 		# Load the image
-		image, cw_ind, room_ind, d_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind = load_bd_rm_act_dimages(paths[i])
+		image, cw_ind, room_ind, d_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind = load_bd_rm_act_images(paths[i])
 
 		# Create a feature
 		feature = {'image': _bytes_feature(tf.compat.as_bytes(image.tostring())),
