@@ -1,6 +1,8 @@
 import argparse
 import io
 import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import sys
 from typing import List, Tuple
 
@@ -9,17 +11,16 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tqdm import tqdm
 
-from .data_act import (
+from .data_furn import (
     convert_one_hot_to_image,
     loadDataset,
     preprocess,
 )
-from .loss import balanced_entropy, cross_two_tasks_weight
-from .net import deepfloorplanModel, deepactivitiesfloorplanModel
+from .loss import balanced_entropy, cross_three_tasks_weight
+from .net import deepfloorplanModel, deepactivitiesfloorplanModel, deepfurnfloorplanModel
 from .net_func import deepfloorplanFunc
 from .utils.settings import overwrite_args_with_toml
 
-os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
 
 def init(
@@ -27,8 +28,10 @@ def init(
 ) -> Tuple[tf.data.Dataset, tf.keras.Model, tf.keras.optimizers.Optimizer]:
     dataset = loadDataset()
     if config.tfmodel == "subclass":
-        if config.activities:
+        if config.activities and not config.furniture:
             model = deepactivitiesfloorplanModel(config=config)
+        elif config.furniture:
+            model = deepfurnfloorplanModel(config=config)
         else:
             model = deepfloorplanModel(config=config)
     elif config.tfmodel == "func":
@@ -56,55 +59,63 @@ def image_grid(
     img: tf.Tensor,
     bound: tf.Tensor,
     room: tf.Tensor,
+    furn: tf.Tensor,
     logr: tf.Tensor,
     logcw: tf.Tensor,
+    logf: tf.Tensor
 ) -> matplotlib.figure.Figure:
-    figure = plt.figure(figsize=(10,10))
-    plt.subplot(2, 4, 1)
+    figure = plt.figure(figsize=(15,10))
+    plt.subplot(2, 5, 1)
     plt.imshow(img[0, :, :, :3].numpy())  # only plot first 3 channels as the original image
     plt.title("Image")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 4, 2)
-    plt.imshow(img[0, :, :, 3:4].numpy().squeeze(), cmap='gray')  # plot the "act_door" activity
-    plt.title("Act_door")
-    plt.xticks([])
-    plt.yticks([])
-    plt.grid(False)
-    plt.subplot(2, 4, 3)
+    plt.subplot(2, 5, 2)
     plt.imshow(img[0, :, :, 4:5].numpy().squeeze(), cmap='gray')  # plot the "act_sitt" activity
     plt.title("Act_sitt")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 4, 4)
+    plt.subplot(2, 5, 3)
     plt.imshow(img[0, :, :, 5:6].numpy().squeeze(), cmap='gray')  # plot the "act_lay" activity
     plt.title("Act_lay")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 4, 5)
-    plt.imshow(bound[0].numpy().squeeze(), cmap='gray')
+    plt.subplot(2, 5, 4)
+    plt.imshow(bound[0].numpy())
     plt.title("Boundary")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 4, 6)
-    plt.imshow(room[0].numpy().squeeze(), cmap='gray')
+    plt.subplot(2, 5, 5)
+    plt.imshow(room[0].numpy())
     plt.title("Room")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 4, 7)
-    plt.imshow(convert_one_hot_to_image(logcw)[0].numpy().squeeze(), cmap='gray')
+    plt.subplot(2, 5, 6)
+    plt.imshow(furn[0].numpy())
+    plt.title("Furniture")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.subplot(2, 5, 7)
+    plt.imshow(convert_one_hot_to_image(logcw)[0].numpy().squeeze())
     plt.title("Log CW")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.subplot(2, 4, 8)
-    plt.imshow(convert_one_hot_to_image(logr)[0].numpy().squeeze(), cmap='gray')
+    plt.subplot(2, 5, 8)
+    plt.imshow(convert_one_hot_to_image(logr)[0].numpy().squeeze())
     plt.title("Log R")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.subplot(2, 5, 9)
+    plt.imshow(convert_one_hot_to_image(logf)[0].numpy().squeeze())
+    plt.title("Log F")
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
@@ -117,18 +128,20 @@ def train_step(
     img: tf.Tensor,
     hr: tf.Tensor,
     hb: tf.Tensor,
+    hf: tf.Tensor
 ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
     # forward
     with tf.GradientTape() as tape:
-        logits_r, logits_cw = model(img)
+        logits_r, logits_cw, logits_f = model(img)
         loss1 = balanced_entropy(logits_r, hr)
         loss2 = balanced_entropy(logits_cw, hb)
-        w1, w2 = cross_two_tasks_weight(hr, hb)
-        loss = w1 * loss1 + w2 * loss2
+        loss3 = balanced_entropy(logits_f, hf)
+        w1, w2, w3 = cross_three_tasks_weight(hr, hb, hf)
+        loss = w1 * loss1 + w2 * loss2 + w3 * loss3
     # backward
     grads = tape.gradient(loss, model.trainable_weights)
     optim.apply_gradients(zip(grads, model.trainable_weights))
-    return logits_r, logits_cw, loss, loss1, loss2
+    return logits_r, logits_cw, logits_f, loss, loss1, loss2, loss3
 
 
 def main(config: argparse.Namespace):
@@ -140,21 +153,22 @@ def main(config: argparse.Namespace):
     for epoch in range(config.epochs):
         print("[INFO] Epoch {}".format(epoch))
         for data in tqdm(list(dataset.shuffle(400).batch(config.batchsize))):
-            img, bound, room, act_door, act_sitt, act_lay, act_wash, hb, hr = preprocess(
-                data['image'], data['boundary'], data['room'], data['act_door'], data['act_sitt'], data['act_lay'], data['act_wash']
+            img, bound, room, furn, act_door, act_sitt, act_lay, act_wash, hb, hr, hf = preprocess(
+                data['image'], data['boundary'], data['room'], data['furn'], data['act_door'], data['act_sitt'], data['act_lay'], data['act_wash']
                 )
-            logits_r, logits_cw, loss, loss1, loss2 = train_step(
-                model, optim, img, hr, hb
+            logits_r, logits_cw, logits_f, loss, loss1, loss2, loss3 = train_step(
+                model, optim, img, hr, hb, hf
             )
 
             # plot progress
             if pltiter % config.save_tensor_interval == 0:
-                f = image_grid(img, bound, room, logits_r, logits_cw)
+                f = image_grid(img, bound, room, furn, logits_r, logits_cw, logits_f)
                 im = plot_to_image(f)
                 with writer.as_default():
                     tf.summary.scalar("Loss", loss.numpy(), step=pltiter)
                     tf.summary.scalar("LossR", loss1.numpy(), step=pltiter)
                     tf.summary.scalar("LossB", loss2.numpy(), step=pltiter)
+                    tf.summary.scalar("LossF", loss3.numpy(), step=pltiter)
                     tf.summary.image("Data", im, step=pltiter)
                 writer.flush()
             pltiter += 1
@@ -175,10 +189,11 @@ def parse_args(args: List[str]) -> argparse.Namespace:
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--wd", type=float, default=1e-5)
     p.add_argument("--epochs", type=int, default=1000)
-    p.add_argument("--logdir", type=str, default="/cluster/scratch/amohap/data/tf2deep/activity/log/store")
-    p.add_argument("--modeldir", type=str, default="/cluster/scratch/amohap/data/tf2deep/activity/model/store")
+    p.add_argument("--logdir", type=str, default="/local/home/amohap/data/tf2deep/furniture/log/store")
+    p.add_argument("--modeldir", type=str, default="/local/home/amohap/data/tf2deep/furniture/model/store")
     p.add_argument("--weight", type=str)
     p.add_argument("--activities", action='store_true')
+    p.add_argument("--furniture", action='store_true')
     p.add_argument("--save-tensor-interval", type=int, default=10)
     p.add_argument("--save-model-interval", type=int, default=20)
     p.add_argument("--tomlfile", type=str, default=None)

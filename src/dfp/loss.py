@@ -10,6 +10,13 @@ def cross_two_tasks_weight(
     w1, w2 = p2 / (p1 + p2), p1 / (p1 + p2)
     return w1, w2
 
+def cross_three_tasks_weight(
+        y1: tf.Tensor, y2: tf.Tensor, y3: tf.Tensor
+        ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
+    p1, p2, p3 = tf.keras.backend.sum(y1), tf.keras.backend.sum(y2), tf.keras.backend.sum(y3)
+    total = p1 + p2 + p3
+    w1, w2, w3 = (p2 + p3) / total, (p1 + p3) / total, (p1 + p2) / total
+    return w1, w2, w3
 
 def balanced_entropy(x: tf.Tensor, y: tf.Tensor) -> tf.Tensor:
     eps = 1e-6
