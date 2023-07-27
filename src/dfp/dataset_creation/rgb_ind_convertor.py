@@ -14,25 +14,26 @@ floorplan_room_map = {
 }
 
 floorplan_furn_map = {
-	0: [  12,  34,  56], # cabinet
-	1: [78, 90, 102], # table
-	2: [114, 126, 138], # bookshelf
-	3: [150, 162, 174], # counter
-	4: [186, 198, 210], # desk
-	5: [222, 234, 246], # shelves
-	6: [247, 123, 189], # dresser
-	7: [137, 99, 203], # mirror
-	8: [59, 171, 93],  # fridge
-	9: [125, 231, 127], # television
-	10: [189, 17, 157], # box
-	11: [77, 181, 219], # whiteboard
-	12: [33, 75, 141], # night stand
-	13: [211, 45, 71], # bed
-	14: [175, 107, 35], # chair
-	15: [63, 209, 243], # sofa
-	16: [29, 141, 55], # toiled
-	17: [95, 201, 111], # sink
-    18: [159, 5, 163] # batchtub
+	0: [0, 0, 0], #background
+	1: [  12,  34,  56], # cabinet
+	2: [78, 90, 102], # table
+	3: [114, 126, 138], # bookshelf
+	4: [150, 162, 174], # counter
+	5: [186, 198, 210], # desk
+	6: [222, 234, 246], # shelves
+	7: [247, 123, 189], # dresser
+	8: [137, 99, 203], # mirror
+	9: [59, 171, 93],  # fridge
+	10: [125, 231, 127], # television
+	11: [189, 17, 157], # box
+	12: [77, 181, 219], # whiteboard
+	13: [33, 75, 141], # night stand
+	14: [211, 45, 71], # bed
+	15: [175, 107, 35], # chair
+	16: [63, 209, 243], # sofa
+	17: [29, 141, 55], # toiled
+	18: [95, 201, 111], # sink
+    19: [159, 5, 163] # bathtub
 }
 
 tf2deep_furn_cmap = {
@@ -115,7 +116,7 @@ def rgb2ind(im, color_map=floorplan_room_map):
 def ind2rgb(ind_im, color_map=floorplan_room_map):
 	rgb_im = np.zeros((ind_im.shape[0], ind_im.shape[1], 3))
 
-	for i, rgb in color_map.iteritems():
+	for i, rgb in color_map.items():
 		rgb_im[(ind_im==i)] = rgb
 
 	return rgb_im

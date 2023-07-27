@@ -143,6 +143,71 @@ def read_record(data_path, batch_size=1, size=512):
 	return {'images': images, 'walls': walls, 'closes': closes, 'rooms': rooms, 'close_walls': close_walls}
 	# return {'images': images, 'walls': walls}
 
+
+def read_record_act_furn(data_path, batch_size=1, size=512):
+	feature = {'image': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'boundary': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'room': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'door': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'furn': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'act_door': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'act_sitt': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'act_lay': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+				'act_wash': tf.io.FixedLenFeature(shape=(), dtype=tf.string)}
+
+	# Create a list of filenames and pass it to a queue
+	filename_queue = tf.compat.v1.train.string_input_producer([data_path], num_epochs=None, shuffle=False, capacity=batch_size*128)
+	
+	# Define a reader and read the next record
+	reader = tf.TFRecordReader()
+	_, serialized_example = reader.read(filename_queue)
+
+	# Decode the record read by the reader
+	features = tf.parse_single_example(serialized_example, features=feature)
+
+	# Convert the image data from string back to the numbers
+	image = tf.decode_raw(features['image'], tf.uint8)
+	wall = tf.decode_raw(features['boundary'], tf.uint8)
+	door = tf.decode_raw(features['door'], tf.uint8)
+	furn = tf.decode_raw(features['furn'], tf.uint8)
+	room = tf.decode_raw(features['room'], tf.uint8)
+	#close_wall = tf.decode_raw(features['close_wall'], tf.uint8)
+
+	# Cast data
+	image = tf.cast(image, dtype=tf.float32)
+	wall = tf.cast(wall, dtype=tf.float32)
+	door = tf.cast(door, dtype=tf.float32)
+	# furn = tf.cast(furn, dtype=tf.float32)
+	# room = tf.cast(room, dtype=tf.float32)
+	#close_wall = tf.cast(close_wall, dtype=tf.float32)
+
+	# Reshape image data into the original shape
+	image = tf.reshape(image, [size, size, 3])
+	wall = tf.reshape(wall, [size, size, 1])
+	door = tf.reshape(door, [size, size, 1])
+	furn = tf.reshape(furn, [size, size])
+	room = tf.reshape(room, [size, size])
+	#close_wall = tf.reshape(close_wall, [size, size, 1])
+
+
+	# Any preprocessing here ...
+	# normalize 
+	image = tf.divide(image, tf.constant(255.0))
+	wall = tf.divide(wall, tf.constant(255.0))
+	door = tf.divide(door, tf.constant(255.0))
+	#close_wall = tf.divide(close_wall, tf.constant(255.0))
+
+	# Genereate one hot room label
+	room_one_hot = tf.one_hot(room, 9, axis=-1)
+	furn_one_hot = tf.one_hot(room, 19, axis=-1)
+
+	# Creates batches by randomly shuffling tensors
+	images, walls, doors, rooms, furns = tf.train.shuffle_batch([image, wall, door, room_one_hot, furn_one_hot], 
+						batch_size=batch_size, capacity=batch_size*128, num_threads=1, min_after_dequeue=batch_size*32)	
+
+
+	return {'images': images, 'walls': walls, 'doors': doors, 'rooms': rooms, 'furns': furns}
+
 # ------------------------------------------------------------------------------------------------------------------------------------- *
 # Following are only for segmentation task, merge all label into one 
 
@@ -394,7 +459,7 @@ def write_bd_rm_act_furn_record(paths, name='dataset.tfrecords'):
     
 		# Serialize to string and write on the file
 		writer.write(example.SerializeToString())
-    
+		
 	writer.close()
 
 def load_bd_rm_act_furn_images(path):
@@ -424,14 +489,16 @@ def load_bd_rm_act_furn_images(path):
     close = (resize(close, (512, 512)) * 255).astype(np.uint8) / 255.
     close_wall = (resize(close_wall, (512, 512)) * 255).astype(np.uint8) / 255.
     room = (resize(room, (512, 512)) * 255).astype(np.uint8)
-    furn = (resize(furn, (512, 512)) * 255).astype(np.uint8)
+    furn = (resize(furn, (512, 512), order=0, anti_aliasing=False)).astype(int)
+
+	# Convert to index arrays
+    room_ind = rgb2ind(room)
+    furn_ind = rgb2ind(furn, floorplan_furn_map)
+    
     act_door = (resize(act_door, (512, 512)) * 255).astype(np.uint8) / 255.
     act_sitting = (resize(act_sitting, (512, 512)) * 255).astype(np.uint8) / 255.
     act_laying = (resize(act_laying, (512, 512)) * 255).astype(np.uint8) / 255.
     act_washing = (resize(act_washing, (512, 512)) * 255).astype(np.uint8) / 255.
-
-    room_ind = rgb2ind(room)
-    furn_ind = rgb2ind(furn, floorplan_furn_map)
 
 	# merge result
     d_ind = (close>0.5).astype(np.uint8)
@@ -449,6 +516,17 @@ def load_bd_rm_act_furn_images(path):
     room_ind = room_ind.astype(np.uint8)
     furn_ind = furn_ind.astype(np.uint8)
     cw_ind = cw_ind.astype(np.uint8)
+
+	# debugging
+    # rm = ind2rgb(room_ind)
+    # furn = ind2rgb(furn_ind, floorplan_furn_map)
+    # plt.subplot(141)
+    # plt.imshow(image)
+    # plt.subplot(142)
+    # plt.imshow(rm/256.)
+    # plt.subplot(143)
+    # plt.imshow(furn/256., interpolation='None')
+    # plt.show()
 
     return image, cw_ind, room_ind, d_ind, furn_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind
 

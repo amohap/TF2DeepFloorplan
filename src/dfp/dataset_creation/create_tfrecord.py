@@ -7,7 +7,7 @@ test_file = 'structured3d_activities_furn_test.txt'
 
 # debug
 if __name__ == '__main__':
-    write_new_txt = True
+    write_new_txt = False
     write_tf_record = True
     include_activities = True
     include_furn = True
@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
         # write the r3d_train.txt and r3d_test.txt
         # Specify your directory
-        directory = '/home/amohap/MT/code/t-mt-2023-FloorplanReconstruction-AdrianaMohap/source/trajectory_sampling/plots/tf2deep_act_furn/'
+        directory = '/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn/'
 
         # List all files in directory
         all_files = os.listdir(directory)
@@ -107,8 +107,8 @@ if __name__ == '__main__':
             write_bd_rm_act_record(train_paths, name='tf2deep_act_train.tfrecords')
             write_bd_rm_act_record(test_paths, name='tf2deep_act_test.tfrecords')
         elif include_activities and include_furn:
-            write_bd_rm_act_furn_record(train_paths, name='tf2deep_act_furn_train.tfrecords')
-            write_bd_rm_act_furn_record(test_paths, name='tf2deep_act_furn_test.tfrecords')
+            write_bd_rm_act_furn_record(train_paths, name='/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_train.tfrecords')
+            write_bd_rm_act_furn_record(test_paths, name='/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_test.tfrecords')
         else:
             write_bd_rm_record(train_paths, name='tf2deep_train.tfrecords')
             write_bd_rm_record(test_paths, name='tf2deep_test.tfrecords')
