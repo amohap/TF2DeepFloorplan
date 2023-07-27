@@ -1,3 +1,6 @@
+import os
+import argparse
+
 from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
@@ -63,15 +66,11 @@ def decodeAllRaw(
     return image, boundary, room, furn, act_door, act_sitt, act_lay, act_wash
 
 
-def preprocess(
-    img: tf.Tensor, bound: tf.Tensor, room: tf.Tensor, furn: tf.Tensor, act_door: tf.Tensor, act_sitt: tf.Tensor, act_lay: tf.Tensor, act_wash: tf.Tensor, size: int=512
+def preprocess(img: tf.Tensor, bound: tf.Tensor, room: tf.Tensor, furn: tf.Tensor, act_door: tf.Tensor, act_sitt: tf.Tensor, act_lay: tf.Tensor, act_wash: tf.Tensor, size: int=512
 ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
     
     # Normalize the image to [0, 1] range.
     img = tf.cast(img, dtype=tf.float32) / 255
-    
-    # No need to reshape since it's already done in _parse_function()
-    # img = tf.reshape(img, [-1, size, size, 3]) / 255
 
     # The other tensors are also already reshaped in _parse_function()
     bound = tf.reshape(bound, [-1, size, size])
@@ -86,30 +85,42 @@ def preprocess(
 
     hot_b = tf.one_hot(bound, 3, axis=-1)
     hot_r = tf.one_hot(room, 9, axis=-1)
-    hot_f = tf.one_hot(furn, 19, axis=-1)
+    hot_f = tf.one_hot(furn, 20, axis=-1)
 
     # concatenate the activity tensors to the input image along the channel dimension
-    img = tf.concat([img, act_door, act_sitt, act_lay, act_wash], axis=-1)
+    img = tf.concat([img, act_sitt, act_lay], axis=-1)
 
     return img, bound, room, furn, act_door, act_sitt, act_lay, act_wash, hot_b, hot_r, hot_f
 
 
 
-def loadDataset(size: int = 512) -> tf.data.Dataset:
-    raw_dataset = tf.data.TFRecordDataset("/local/home/amohap/data/tf2deep/furniture/tf2deep_act_furn_train.tfrecords")
+def loadDataset(config: argparse.Namespace, size: int = 512) -> tf.data.Dataset:
+    if config.mode == "train":
+        dataset = "tf2deep_act_furn_train.tfrecords"
+    else:
+        dataset = "tf2deep_act_furn_test.tfrecords"
+    raw_dataset = tf.data.TFRecordDataset(os.path.join(config.datadir, dataset))
     parsed_dataset = raw_dataset.map(_parse_function)
     return parsed_dataset
 
 
 def plotData(data: Dict[str, tf.Tensor]):
-    img, bound, room, furn, act_door, act_sitt, act_lay, act_wash = decodeAllRaw(data)
-    img, bound, room, act_door, act_sitt, act_lay, act_wash, hb, hr, hf = preprocess(img, bound, room, furn)
-    plt.subplot(1, 3, 1)
-    plt.imshow(img[0].numpy())
-    plt.subplot(1, 3, 2)
+    img, bound, room, furn, act_door, act_sitt, act_lay, act_wash, hb, hr, hf = preprocess(
+                data['image'], data['boundary'], data['room'], data['furn'], data['act_door'], data['act_sitt'], data['act_lay'], data['act_wash']
+                )
+ 
+    plt.subplot(2, 3, 1)
+    plt.imshow(img[0, :, :, :3].numpy())
+    plt.subplot(2, 3, 2)
     plt.imshow(bound[0].numpy())
-    plt.subplot(1, 3, 3)
+    plt.subplot(2, 3, 3)
     plt.imshow(convert_one_hot_to_image(hb)[0].numpy())
+    plt.subplot(2, 3, 4)
+    plt.imshow(room[0].numpy())
+    plt.subplot(2, 3, 5)
+    plt.imshow(furn[0].numpy())
+    plt.subplot(2, 3, 6)
+    plt.imshow(convert_one_hot_to_image(hf)[0].numpy())
 
 
 def main(dataset: tf.data.Dataset):
@@ -121,5 +132,8 @@ def main(dataset: tf.data.Dataset):
 
 
 if __name__ == "__main__":
-    dataset = loadDataset()
+    config = argparse.Namespace()
+    config.mode = "train"
+    config.datadir = "/local/home/amohap/data/tf2deep"
+    dataset = loadDataset(config)
     main(dataset)

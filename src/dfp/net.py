@@ -261,12 +261,13 @@ class deepfurnfloorplanModel(Model):
         super(deepfurnfloorplanModel, self).__init__()
         self.config = config
 
-        self.activity_pipeline = tf.keras.Sequential([
-            conv2d(16, size=3, rate=2, act="relu"),  # Dilated convolution
-            conv2d(32, size=3, rate=2, act="relu"),  # Dilated convolution
-            conv2d(64, size=3, rate=2, act="relu"),  # Dilated convolution
-            tf.keras.layers.MaxPool2D(pool_size=(32, 32)) 
-        ])
+        if config.activities:
+            self.activity_pipeline = tf.keras.Sequential([
+                conv2d(16, size=3, rate=2, act="relu"),  # Dilated convolution
+                conv2d(32, size=3, rate=2, act="relu"),  # Dilated convolution
+                conv2d(64, size=3, rate=2, act="relu"),  # Dilated convolution
+                tf.keras.layers.MaxPool2D(pool_size=(32, 32)) 
+            ])
 
         dimlist = [256, 128, 64, 32]
         self.feature_names = [
@@ -283,6 +284,7 @@ class deepfurnfloorplanModel(Model):
             ), "subclass backbone must be vgg16"
             self.feature_names = config.feature_names
         self._vgg16init()
+
         # room boundary prediction (rbp)
         self.rbpups = [upconv2d(dim=d, act="linear") for d in dimlist]
         self.rbpcv1 = [conv2d(dim=d, act="linear") for d in dimlist]
@@ -378,7 +380,19 @@ class deepfurnfloorplanModel(Model):
         # final
         self.rtpfinal = up_bilinear(9)
         # furn final
-        self.ftpfinal = up_bilinear(19)
+        self.ftpfinal = up_bilinear(20)
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'config': vars(self.config)  # convert Namespace to dict for serialization
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        config['config'] = argparse.Namespace(**config['config'])  # convert dict back to Namespace
+        return cls(**config)
 
     def _vgg16init(self):
         self.vgg16 = VGG16(
@@ -436,9 +450,9 @@ class deepfurnfloorplanModel(Model):
 
     def call(self, x: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
         image = x[..., :3]  # original image channels
-        activities = x[..., 3:]  # new activity channels
-
-        activities = self.activity_pipeline(activities)
+        if self.config.activities:
+            activities = x[..., 3:]
+            activities = self.activity_pipeline(activities)
         
         features = []
         feature = image
@@ -448,7 +462,7 @@ class deepfurnfloorplanModel(Model):
                 features.append(feature)
         
         # room boundary
-        x = feature
+        x = tf.identity(feature) # create a copy of feature tensor
         features = features[::-1]
         featuresrbp = []
         for i in range(len(self.rbpups)):
@@ -461,7 +475,10 @@ class deepfurnfloorplanModel(Model):
 
         # room type
         # Concatenate the vgg16 output and the activity pipeline output
-        x = tf.concat([feature, activities], axis=-1)
+        if self.config.activities:
+            x = tf.concat([tf.identity(feature), activities], axis=-1)
+        else:
+            x = tf.identity(feature)
 
         for i in range(len(self.rtpups)):
             x = self.rtpups[i](x) + self.rtpcv1[i](features[i + 1])
@@ -472,461 +489,26 @@ class deepfurnfloorplanModel(Model):
         )
 
         # room furniture
-        x = feature
-        for i in range(len(self.ftpups)):
-            x = self.ftpups[i](x) + self.ftpcv1[i](features[i + 1])
-            x = self.ftpcv2[i](x)
-            x = self.non_local_context(featuresrbp[i], x, i)
-        logits_f = tf.keras.backend.resize_images(
-            self.ftpfinal(x), 2, 2, "channels_last"
-        )
+        if self.config.furniture:
+           
+            if self.config.activities:
+                x = tf.concat([tf.identity(feature), activities], axis=-1) 
+            else:
+                x = tf.identity(feature) 
+            
+            # comment out if context module is used
+            #featuresftp = []
+            for i in range(len(self.ftpups)):
+                x = self.ftpups[i](x) + self.ftpcv1[i](features[i + 1])
+                x = self.ftpcv2[i](x)
+                # comment out if context module is used
+                #featuresftp.append(x)
+                x = self.non_local_context(featuresrbp[i], x, i)
+            logits_f = tf.keras.backend.resize_images(
+                self.ftpfinal(x), 2, 2, "channels_last"
+            )
         
-        return logits_r, logits_cw, logits_f
-
-
-class deepactivitiesfloorplanModel(Model):
-    def __init__(self, config: argparse.Namespace = None):
-        super(deepactivitiesfloorplanModel, self).__init__()
-        self.config = config
-
-        self.activity_pipeline = tf.keras.Sequential([
-            conv2d(16, size=3, rate=2, act="relu"),  # Dilated convolution
-            conv2d(32, size=3, rate=2, act="relu"),  # Dilated convolution
-            conv2d(64, size=3, rate=2, act="relu"),  # Dilated convolution
-            tf.keras.layers.MaxPool2D(pool_size=(32, 32)) 
-        ])
-
-        dimlist = [256, 128, 64, 32]
-        self.feature_names = [
-            "block1_pool",
-            "block2_pool",
-            "block3_pool",
-            "block4_pool",
-            "block5_pool",
-        ]
-        if config is not None:
-            dimlist = config.feature_channels
-            assert (
-                config.backbone == "vgg16"
-            ), "subclass backbone must be vgg16"
-            self.feature_names = config.feature_names
-        self._vgg16init()
-        # room boundary prediction (rbp)
-        self.rbpups = [upconv2d(dim=d, act="linear") for d in dimlist]
-        self.rbpcv1 = [conv2d(dim=d, act="linear") for d in dimlist]
-        self.rbpcv2 = [conv2d(dim=d) for d in dimlist]
-        self.rbpfinal = up_bilinear(3)
-
-        # room type prediction (rtp)
-        self.rtpups = [upconv2d(dim=d, act="linear") for d in dimlist]
-        self.rtpcv1 = [conv2d(dim=d, act="linear") for d in dimlist]
-        self.rtpcv2 = [conv2d(dim=d) for d in dimlist]
-
-        # attention map
-        self.atts1 = [conv2d(dim=dimlist[i]) for i in range(len(dimlist))]
-        self.atts2 = [conv2d(dim=dimlist[i]) for i in range(len(dimlist))]
-        self.atts3 = [
-            conv2d(dim=1, size=1, act="sigmoid") for i in range(len(dimlist))
-        ]
-
-        # reduce the tensor depth
-        self.xs1 = [conv2d(dim=d) for d in dimlist]
-        self.xs2 = [conv2d(dim=1, size=1, act="linear") for d in dimlist]
-
-        # context conv2d
-        dak = [9, 17, 33, 65]  # kernel_shape=[h,v,inc,outc]
-        # horizontal
-        self.hs = [self.constant_kernel((d, 1, 1, 1)) for d in dak]
-        self.hf = [
-            tf.keras.layers.Conv2D(
-                1,
-                [dak[i], 1],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.hs[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # vertical
-        self.vs = [self.constant_kernel((1, d, 1, 1)) for d in dak]
-        self.vf = [
-            tf.keras.layers.Conv2D(
-                1,
-                [1, dak[i]],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.vs[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # diagonal
-        self.ds = [self.constant_kernel((d, d, 1, 1), diag=True) for d in dak]
-        self.df = [
-            tf.keras.layers.Conv2D(
-                1,
-                dak[i],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.ds[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # diagonal flip
-        self.dfs = [
-            self.constant_kernel((d, d, 1, 1), diag=True, flip=True)
-            for d in dak
-        ]
-        self.dff = [
-            tf.keras.layers.Conv2D(
-                1,
-                dak[i],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.dfs[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # expand dim
-        self.ed = [conv2d(dim=d, size=1, act="linear") for d in dimlist]
-        # learn rich feature
-        self.lrf = [conv2d(dim=d) for d in dimlist]
-        # final
-        self.rtpfinal = up_bilinear(9)
-
-    def _vgg16init(self):
-        self.vgg16 = VGG16(
-            weights="imagenet", include_top=False, input_shape=(512, 512, 3)
-        )
-        for layer in self.vgg16.layers:
-            layer.trainable = False
-
-    def constant_kernel(
-        self,
-        shape: Tuple[int, int, int, int],
-        val: int = 1,
-        diag: bool = False,
-        flip: bool = False,
-    ) -> np.ndarray:
-        k = np.array([]).astype(int)
-        if not diag:
-            k = val * np.ones(shape)
+            return logits_r, logits_cw, logits_f
+        
         else:
-            w = np.eye(shape[0], shape[1])
-            if flip:
-                w = w.reshape((shape[0], shape[1], 1))
-                w = np.flip(w, 1)
-            k = w.reshape(shape)
-        return k
-
-    def non_local_context(
-        self, t1: tf.Tensor, t2: tf.Tensor, idx: int, stride: int = 4
-    ) -> tf.Tensor:
-        N, H, W, C = t1.shape.as_list()
-        hs = H // stride if (H // stride) > 1 else (stride - 1)
-        vs = W // stride if (W // stride) > 1 else (stride - 1)
-        hs = hs if (hs % 2 != 0) else hs + 1
-        vs = hs if (vs % 2 != 0) else vs + 1
-        a = t1
-        x = t2
-        a = self.atts1[idx](a)
-        a = self.atts2[idx](a)
-        a = self.atts3[idx](a)
-        a = tf.keras.activations.sigmoid(a)
-        x = self.xs1[idx](x)
-        x = self.xs2[idx](x)
-        x = a * x
-
-        h = self.hf[idx](x)
-        v = self.vf[idx](x)
-        d = self.df[idx](x)
-        f = self.dff[idx](x)
-        c1 = a * (h + v + d + f)
-        c1 = self.ed[idx](c1)
-
-        features = tf.concat([t2, c1], axis=3)
-        out = self.lrf[idx](features)
-        return out
-
-    def call(self, x: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
-        image = x[..., :3]  # original image channels
-        activities = x[..., 3:]  # new activity channels
-
-        activities = self.activity_pipeline(activities)
-        
-        features = []
-        feature = image
-        for layer in self.vgg16.layers:
-            feature = layer(feature)
-            if layer.name in self.feature_names:
-                features.append(feature)
-        
-        x = feature
-        features = features[::-1]
-        featuresrbp = []
-        for i in range(len(self.rbpups)):
-            x = self.rbpups[i](x) + self.rbpcv1[i](features[i + 1])
-            x = self.rbpcv2[i](x)
-            featuresrbp.append(x)
-        logits_cw = tf.keras.backend.resize_images(
-            self.rbpfinal(x), 2, 2, "channels_last"
-        )
-
-        # Concatenate the vgg16 output and the activity pipeline output
-        x = tf.concat([feature, activities], axis=-1)
-
-        for i in range(len(self.rtpups)):
-            x = self.rtpups[i](x) + self.rtpcv1[i](features[i + 1])
-            x = self.rtpcv2[i](x)
-            x = self.non_local_context(featuresrbp[i], x, i)
-        logits_r = tf.keras.backend.resize_images(
-            self.rtpfinal(x), 2, 2, "channels_last"
-        )
-        return logits_r, logits_cw
-    
-
-'''
-# full end-to-end implementation
-class deepfurnfloorplanModel(Model):
-    def __init__(self, config: argparse.Namespace = None):
-        super(deepfurnfloorplanModel, self).__init__()
-        self.config = config
-        dimlist = [256, 128, 64, 32]
-        self.feature_names = [
-            "block1_pool",
-            "block2_pool",
-            "block3_pool",
-            "block4_pool",
-            "block5_pool",
-        ]
-        if config is not None:
-            dimlist = config.feature_channels
-            assert (
-                config.backbone == "vgg16"
-            ), "subclass backbone must be vgg16"
-            self.feature_names = config.feature_names
-        self._vgg16init()
-        # room boundary prediction (rbp)
-        self.rbpups = [upconv2d(dim=d, act="linear") for d in dimlist]
-        self.rbpcv1 = [conv2d(dim=d, act="linear") for d in dimlist]
-        self.rbpcv2 = [conv2d(dim=d) for d in dimlist]
-        self.rbpfinal = up_bilinear(3)
-
-        # room type prediction (rtp)
-        self.rtpups = [upconv2d(dim=d, act="linear") for d in dimlist]
-        self.rtpcv1 = [conv2d(dim=d, act="linear") for d in dimlist]
-        self.rtpcv2 = [conv2d(dim=d) for d in dimlist]
-
-        # attention map
-        self.atts1 = [conv2d(dim=dimlist[i]) for i in range(len(dimlist))]
-        self.atts2 = [conv2d(dim=dimlist[i]) for i in range(len(dimlist))]
-        self.atts3 = [
-            conv2d(dim=1, size=1, act="sigmoid") for i in range(len(dimlist))
-        ]
-
-        # reduce the tensor depth
-        self.xs1 = [conv2d(dim=d) for d in dimlist]
-        self.xs2 = [conv2d(dim=1, size=1, act="linear") for d in dimlist]
-
-        # context conv2d
-        dak = [9, 17, 33, 65]  # kernel_shape=[h,v,inc,outc]
-        # horizontal
-        self.hs = [self.constant_kernel((d, 1, 1, 1)) for d in dak]
-        self.hf = [
-            tf.keras.layers.Conv2D(
-                1,
-                [dak[i], 1],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.hs[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # vertical
-        self.vs = [self.constant_kernel((1, d, 1, 1)) for d in dak]
-        self.vf = [
-            tf.keras.layers.Conv2D(
-                1,
-                [1, dak[i]],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.vs[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # diagonal
-        self.ds = [self.constant_kernel((d, d, 1, 1), diag=True) for d in dak]
-        self.df = [
-            tf.keras.layers.Conv2D(
-                1,
-                dak[i],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.ds[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # diagonal flip
-        self.dfs = [
-            self.constant_kernel((d, d, 1, 1), diag=True, flip=True)
-            for d in dak
-        ]
-        self.dff = [
-            tf.keras.layers.Conv2D(
-                1,
-                dak[i],
-                strides=1,
-                padding="same",
-                trainable=False,
-                use_bias=False,
-                weights=[self.dfs[i]],
-            )
-            for i in range(len(dak))
-        ]
-        # expand dim
-        self.ed = [conv2d(dim=d, size=1, act="linear") for d in dimlist]
-        # learn rich feature
-        self.lrf = [conv2d(dim=d) for d in dimlist]
-        # final
-        self.rtpfinal = up_bilinear(9)
-
-    def _vgg16init(self):
-        self.vgg16 = VGG16(
-            weights="imagenet", include_top=False, input_shape=(512, 512, 3)
-        )
-        for layer in self.vgg16.layers:
-            layer.trainable = False
-
-    def constant_kernel(
-        self,
-        shape: Tuple[int, int, int, int],
-        val: int = 1,
-        diag: bool = False,
-        flip: bool = False,
-    ) -> np.ndarray:
-        k = np.array([]).astype(int)
-        if not diag:
-            k = val * np.ones(shape)
-        else:
-            w = np.eye(shape[0], shape[1])
-            if flip:
-                w = w.reshape((shape[0], shape[1], 1))
-                w = np.flip(w, 1)
-            k = w.reshape(shape)
-        return k
-
-    def non_local_context(
-        self, t1: tf.Tensor, t2: tf.Tensor, idx: int, stride: int = 4
-    ) -> tf.Tensor:
-        N, H, W, C = t1.shape.as_list()
-        hs = H // stride if (H // stride) > 1 else (stride - 1)
-        vs = W // stride if (W // stride) > 1 else (stride - 1)
-        hs = hs if (hs % 2 != 0) else hs + 1
-        vs = hs if (vs % 2 != 0) else vs + 1
-        a = t1
-        x = t2
-        a = self.atts1[idx](a)
-        a = self.atts2[idx](a)
-        a = self.atts3[idx](a)
-        a = tf.keras.activations.sigmoid(a)
-        x = self.xs1[idx](x)
-        x = self.xs2[idx](x)
-        x = a * x
-
-        h = self.hf[idx](x)
-        v = self.vf[idx](x)
-        d = self.df[idx](x)
-        f = self.dff[idx](x)
-        c1 = a * (h + v + d + f)
-        c1 = self.ed[idx](c1)
-
-        features = tf.concat([t2, c1], axis=3)
-        out = self.lrf[idx](features)
-        return out
-    
-    def furniture_branch(self, x: tf.Tensor, activity_maps: tf.Tensor) -> tf.Tensor:
-        # Implement this method to apply a series of convolutional layers to `x` and `activity_maps`
-        # The output should be a tensor that can be used to predict preliminary furniture classes and bounding boxes.
-        pass
-
-    def furniture_classifier(self, x: tf.Tensor) -> tf.Tensor:
-        # Implement this method to predict preliminary furniture classes from `x`
-        pass
-
-    def bounding_box_predictor(self, x: tf.Tensor) -> tf.Tensor:
-        # Implement this method to predict furniture bounding boxes from `x`
-        pass
-
-    def non_local_context_furn(
-        self, 
-        t1: tf.Tensor, 
-        t2: tf.Tensor, 
-        idx: int, 
-        activity_maps: tf.Tensor, 
-        preliminary_furniture_predictions: tf.Tensor, 
-        stride: int = 4
-    ) -> tf.Tensor:
-        # Modify this method to include `activity_maps` and `preliminary_furniture_predictions` in its computations
-        pass
-
-    def final_furniture_branch(self, x: tf.Tensor, activity_maps: tf.Tensor, preliminary_furniture_predictions: tf.Tensor, room_type_predictions: tf.Tensor) -> tf.Tensor:
-        # Implement this method to apply a series of convolutional layers to `x`, `activity_maps`, `preliminary_furniture_predictions` and `room_type_predictions`
-        # The output should be a tensor that can be used to predict final furniture labels.
-        pass
-
-    def final_furniture_classifier(self, x: tf.Tensor) -> tf.Tensor:
-        # Implement this method to predict final furniture labels from `x`
-        pass
-
-    def call(self, x: tf.Tensor, activity_maps: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        features = []
-        feature = x
-        for layer in self.vgg16.layers:
-            feature = layer(feature)
-            if layer.name in self.feature_names:
-                features.append(feature)
-        x = feature
-        features = features[::-1]
-        featuresrbp = []
-        for i in range(len(self.rbpups)):
-            x = self.rbpups[i](x) + self.rbpcv1[i](features[i + 1])
-            x = self.rbpcv2[i](x)
-            featuresrbp.append(x)
-        logits_cw = tf.keras.backend.resize_images(
-            self.rbpfinal(x), 2, 2, "channels_last"
-        )
-
-        # Furniture branch
-        x_furniture = self.furniture_branch(x, activity_maps)
-        preliminary_furniture_predictions, furniture_bounding_boxes = self.furniture_classifier(x_furniture)
-        
-        x = feature
-
-        # Room type branch
-        for i in range(len(self.rtpups)):
-            x = self.rtpups[i](x) + self.rtpcv1[i](features[i + 1])
-            x = self.rtpcv2[i](x)
-            x = self.non_local_context(featuresrbp[i], x, i)
-        logits_r = tf.keras.backend.resize_images(
-            self.rtpfinal(x), 2, 2, "channels_last"
-        )
-
-        # Furniture classification branch
-        x_furniture_final = self.final_furniture_branch(x, activity_maps, preliminary_furniture_predictions, logits_r)
-        final_furniture_labels = self.final_furniture_classifier(x_furniture_final)
-        
-        return logits_r, logits_cw, final_furniture_labels
-'''
+            return logits_r, logits_cw, None

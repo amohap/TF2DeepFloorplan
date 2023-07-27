@@ -15,6 +15,28 @@ floorplan_room_map = {
     8: [224, 224, 128],  # not used
 }
 
+floorplan_furn_map = {
+	0: [  12,  34,  56], # cabinet
+	1: [78, 90, 102], # table
+	2: [114, 126, 138], # bookshelf
+	3: [150, 162, 174], # counter
+	4: [186, 198, 210], # desk
+	5: [222, 234, 246], # shelves
+	6: [247, 123, 189], # dresser
+	7: [137, 99, 203], # mirror
+	8: [59, 171, 93],  # fridge
+	9: [125, 231, 127], # television
+	10: [189, 17, 157], # box
+	11: [77, 181, 219], # whiteboard
+	12: [33, 75, 141], # night stand
+	13: [211, 45, 71], # bed
+	14: [175, 107, 35], # chair
+	15: [63, 209, 243], # sofa
+	16: [29, 141, 55], # toiled
+	17: [95, 201, 111], # sink
+    18: [159, 5, 163] # batchtub
+}
+
 # boundary label
 floorplan_boundary_map = {
     0: [0, 0, 0],  # background

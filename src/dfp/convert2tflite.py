@@ -9,7 +9,7 @@ import tensorflow_model_optimization as tfmot
 from tqdm import tqdm
 
 from .data import decodeAllRaw, loadDataset, preprocess
-from .net import deepfloorplanModel
+from .net import deepfloorplanModel, deepfurnfloorplanModel
 from .net_func import deepfloorplanFunc
 from .train import train_step
 from .utils.settings import overwrite_args_with_toml
@@ -22,8 +22,10 @@ from .utils.util import (
 def model_init(config: argparse.Namespace) -> tf.keras.Model:
     if config.loadmethod == "log":
         if config.tfmodel == "subclass":
-            base_model = deepfloorplanModel(config=config)
-            base_model.build((1, 512, 512, 3))
+            #base_model = deepfloorplanModel(config=config)
+            base_model = deepfurnfloorplanModel(config=config)
+            dummy_input = tf.random.normal(shape=(1, 512, 512, 7))  # create a random tensor with the input shape
+            base_model.predict(dummy_input) 
             assert True, "subclass and log are not convertible to tflite."
         elif config.tfmodel == "func":
             base_model = deepfloorplanFunc(config=config)
@@ -58,8 +60,8 @@ def parse_args(args: List[str]) -> argparse.Namespace:
     p.add_argument(
         "--tfmodel", type=str, default="subclass", choices=["subclass", "func"]
     )
-    p.add_argument("--modeldir", type=str, default="model/store")
-    p.add_argument("--tflitedir", type=str, default="model/store/model.tflite")
+    p.add_argument("--modeldir", type=str, default="/local/home/amohap/data/tf2deep/furn_act_context/model/store")
+    p.add_argument("--tflitedir", type=str, default="/local/home/amohap/data/tf2deep/furn_act_context/model/store/model.tflite")
     p.add_argument("--quantize", action="store_true")
     p.add_argument(
         "--compress-mode",

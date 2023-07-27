@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 from .data import convert_one_hot_to_image
-from .net import deepfloorplanModel
+from .net import deepfloorplanModel, deepfurnfloorplanModel
 from .net_func import deepfloorplanFunc
 from .utils.rgb_ind_convertor import (
     floorplan_boundary_map,
@@ -27,7 +27,8 @@ def init(
     config: argparse.Namespace,
 ) -> Tuple[tf.keras.Model, tf.Tensor, np.ndarray]:
     if config.tfmodel == "subclass":
-        model = deepfloorplanModel(config=config)
+        #model = deepfloorplanModel(config=config)
+        model = deepfurnfloorplanModel(config=config)
     elif config.tfmodel == "func":
         model = deepfloorplanFunc(config=config)
     if config.loadmethod == "log":
