@@ -20,6 +20,9 @@ from .loss import balanced_entropy, cross_three_tasks_weight, cross_two_tasks_we
 from .net import deepfloorplanModel, deepfurnfloorplanModel
 from .net_func import deepfloorplanFunc
 from .utils.settings import overwrite_args_with_toml
+from .utils.rgb_ind_convertor import (floorplan_boundary_map,
+                                      floorplan_furn_map, floorplan_room_map,
+                                      ind2rgb)
 
 
 
@@ -128,6 +131,101 @@ def image_grid(
         plt.grid(False)
 
     return figure
+
+
+def image_grid_processed(
+    config: argparse.Namespace,
+    img: tf.Tensor,
+    bound: tf.Tensor,
+    room: tf.Tensor,
+    furn: tf.Tensor,
+    logr: tf.Tensor,
+    logcw: tf.Tensor,
+    logf: tf.Tensor
+) -> matplotlib.figure.Figure:
+    figure = plt.figure(figsize=(25,20))
+    plt.subplot(3, 4, 1)
+    plt.imshow(img[0, :, :, :3].numpy()) 
+    plt.title("Input Image")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    
+    plt.subplot(3, 4, 2)
+    bound_ind = ind2rgb(bound[0].numpy(), floorplan_boundary_map)
+    bound_plt = bound_ind.astype('uint8')
+    plt.imshow(bound_plt)
+    plt.title("Boundary Ground Truth")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    
+    plt.subplot(3, 4, 3)
+    room_ind = ind2rgb(room[0].numpy(), floorplan_room_map)
+    room_plot = room_ind.astype('uint8')
+    plt.imshow(room_plot)
+    plt.title("Room Ground Truth")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+
+    if config.furniture:
+        plt.subplot(3, 4, 4)
+        furn_ind = ind2rgb(furn[0].numpy(), floorplan_furn_map)
+        furn_plot = furn_ind.astype('uint8')
+        plt.imshow(furn_plot)
+        plt.title("Furniture Ground Truth")
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+
+    plt.subplot(3, 4, 6)
+    cw_onehot = convert_one_hot_to_image(logcw)[0].numpy().squeeze()
+    cw_ind = ind2rgb(cw_onehot, floorplan_boundary_map)
+    cw_plot = cw_ind.astype('uint8')
+    plt.imshow(cw_plot)
+    plt.title("Boundary Prediction")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+
+    plt.subplot(3, 4, 7)
+    logr_onehot = convert_one_hot_to_image(logr)[0].numpy().squeeze()
+    logr_ind = ind2rgb(logr_onehot, floorplan_room_map)
+    logr_plot = logr_ind.astype('uint8')
+    plt.imshow(logr_plot)
+    plt.title("Room Prediction")
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+
+    if config.furniture:
+        plt.subplot(3, 4, 8)
+        logf_onehot = convert_one_hot_to_image(logf)[0].numpy().squeeze()
+        logf_ind = ind2rgb(logf_onehot, floorplan_furn_map)
+        logf_plot = logf_ind.astype('uint8')
+        plt.imshow(logf_plot)
+        plt.title("Furniture Prediction")
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+    
+    if config.activities:
+        plt.subplot(3, 4, 5)
+        plt.imshow(img[0, :, :, 3:4].numpy().squeeze(), cmap='gray')
+        plt.title("Act_sitt")
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+        plt.subplot(3, 4, 9)
+        plt.imshow(img[0, :, :, 4:5].numpy().squeeze(), cmap='gray') 
+        plt.title("Act_lay")
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+
+    return figure
+
 
 @tf.function
 def train_step(
