@@ -2,8 +2,10 @@ import os
 import random
 from tf_record import *
 
-train_file = 'structured3d_activities_furn_train.txt'
-test_file = 'structured3d_activities_furn_test.txt'
+train_file = 'path_list/structured3d_activities_furn_train_260723.txt'
+test_file = 'path_list/structured3d_activities_furn_test_260723.txt'
+tfrecords_train_file = '/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_train_260723.tfrecords'
+tfrecords_test_file = '/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_test_260723.tfrecords'
 
 # debug
 if __name__ == '__main__':
@@ -104,11 +106,11 @@ if __name__ == '__main__':
             break
         
         if include_activities and not include_furn:
-            write_bd_rm_act_record(train_paths, name='tf2deep_act_train.tfrecords')
-            write_bd_rm_act_record(test_paths, name='tf2deep_act_test.tfrecords')
+            write_bd_rm_act_record(train_paths, name=tfrecords_train_file)
+            write_bd_rm_act_record(test_paths, name=tfrecords_test_file)
         elif include_activities and include_furn:
-            write_bd_rm_act_furn_record(train_paths, name='/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_train.tfrecords')
-            write_bd_rm_act_furn_record(test_paths, name='/media/amohap/Crucial X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_test.tfrecords')
+            write_bd_rm_act_furn_record(train_paths, name=tfrecords_train_file)
+            write_bd_rm_act_furn_record(test_paths, name=tfrecords_test_file)
         else:
-            write_bd_rm_record(train_paths, name='tf2deep_train.tfrecords')
-            write_bd_rm_record(test_paths, name='tf2deep_test.tfrecords')
+            write_bd_rm_record(train_paths, name=tfrecords_train_file)
+            write_bd_rm_record(test_paths, name=tfrecords_test_file)
