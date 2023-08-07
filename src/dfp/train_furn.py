@@ -1,8 +1,6 @@
 import argparse
 import io
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import sys
 from typing import List, Tuple
 
@@ -277,7 +275,7 @@ def main(config: argparse.Namespace):
 
             # plot progress
             if pltiter % config.save_tensor_interval == 0:
-                f = image_grid(config, img, bound, room, furn, logits_r, logits_cw, logits_f)
+                f = image_grid_processed(config, img, bound, room, furn, logits_r, logits_cw, logits_f)
                 im = plot_to_image(f)
                 with writer.as_default():
                     tf.summary.scalar("Loss", loss.numpy(), step=pltiter)

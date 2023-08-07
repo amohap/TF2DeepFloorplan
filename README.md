@@ -1,13 +1,9 @@
-# TF2DeepFloorplan [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [<img src="https://colab.research.google.com/assets/colab-badge.svg" >](https://colab.research.google.com/github/zcemycl/TF2DeepFloorplan/blob/master/deepfloorplan.ipynb) ![example workflow](https://github.com/zcemycl/TF2DeepFloorplan/actions/workflows/main.yml/badge.svg) [![Coverage Status](https://coveralls.io/repos/github/zcemycl/TF2DeepFloorplan/badge.svg?branch=main)](https://coveralls.io/github/zcemycl/TF2DeepFloorplan?branch=main)[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fzcemycl%2FTF2DeepFloorplan&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://hits.seeyoufarm.com)
+# TF2DeepFloorplan [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)]
 This repo contains a basic procedure to train and deploy the DNN model suggested by the paper ['Deep Floor Plan Recognition using a Multi-task Network with Room-boundary-Guided Attention'](https://arxiv.org/abs/1908.11025). It rewrites the original codes from [zlzeng/DeepFloorplan](https://github.com/zlzeng/DeepFloorplan) into newer versions of Tensorflow and Python.
 <br>
-Network Architectures from the paper, <br>
-<img src="resources/dfpmodel.png" width="50%"><img src="resources/features.png" width="50%">
 
 
-### Additional feature (pygame)
-![TF2DeepFloorplan_3dviz](resources/raycast.gif)
-
+#
 ## Requirements
 Depends on different applications, the following installation methods can
 
@@ -15,12 +11,6 @@ Depends on different applications, the following installation methods can
 |---|---|---|---|
 |Ubuntu|CPU|Model Development|`pip install -e .[tfcpu,dev,testing,linting]`|
 |Ubuntu|GPU|Model Development|`pip install -e .[tfgpu,dev,testing,linting]`|
-|MacOS|M1 Chip|Model Development|`pip install -e .[tfmacm1,dev,testing,linting]`|
-|Ubuntu|GPU|Model Deployment API|`pip install -e .[tfgpu,api]`|
-|Ubuntu|GPU|Everything|`pip install -e .[tfgpu,api,dev,testing,linting,game]`|
-|Agnostic|...|Docker|(to be updated)|
-|Ubuntu|GPU|Notebook|`pip install -e .[tfgpu,jupyter]`|
-|Ubuntu|GPU|Game|`pip install -e .[tfgpu,game]`|
 
 ## How to run?
 1. Install packages.
@@ -29,13 +19,15 @@ Depends on different applications, the following installation methods can
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools wheel
+
 # Option 2 (Preferred)
 conda create -n venv python=3.8 cudatoolkit=10.1 cudnn=7.6.5
 conda activate venv
+
 # common install
 pip install -e .[tfgpu,api,dev,testing,linting]
 ```
-2. According to the original repo, please download r3d dataset and transform it to tfrecords `r3d.tfrecords`. Friendly reminder: there is another dataset r2v used to train their original repo's model, I did not use it here cos of limited access. Please see the link here [https://github.com/zlzeng/DeepFloorplan/issues/17](https://github.com/zlzeng/DeepFloorplan/issues/17).
+2. According to the original repo, please download r3d dataset and transform it to tfrecords `r3d.tfrecords`. 
 3. Run the `train.py` file  to initiate the training, model checkpoint is stored as `log/store/G` and weight is in `model/store`,
 ```
 python -m dfp.train [--batchsize 2][--lr 1e-4][--epochs 1000]
@@ -54,24 +46,7 @@ python -m dfp.train --batchsize=4 --lr=5e-4 --epochs=100
 ```
 tensorboard --logdir=log/store
 ```
-5. Convert model to tflite via `convert2tflite.py`.
-```
-python -m dfp.convert2tflite [--modeldir model/store]
-[--tflitedir model/store/model.tflite]
-[--loadmethod 'log'/'none'/'pb']
-[--quantize][--tfmodel 'subclass'/'func']
-[--feature-channels 256 128 64 32]
-[--backbone 'vgg16'/'mobilenetv1'/'mobilenetv2'/'resnet50']
-[--feature-names block1_pool block2_pool block3_pool block4_pool block5_pool]
-```
-6. Download and unzip model from google drive,
-```
-gdown https://drive.google.com/uc?id=1czUSFvk6Z49H-zRikTc67g2HUUz4imON # log files 112.5mb
-unzip log.zip
-gdown https://drive.google.com/uc?id=1tuqUPbiZnuubPFHMQqCo1_kFNKq4hU8i # pb files 107.3mb
-unzip model.zip
-gdown https://drive.google.com/uc?id=1B-Fw-zgufEqiLm00ec2WCMUo5E6RY2eO # tfilte file 37.1mb
-unzip tflite.zip
+
 ```
 7. Deploy the model via `deploy.py`, please be aware that load method parameter should match with weight input.
 ```
@@ -89,65 +64,6 @@ python -m dfp.deploy [--image 'path/to/image']
 python -m dfp.deploy --image floorplan.jpg --weight log/store/G
 --postprocess --colorize --save output.jpg --loadmethod log
 ```
-8. Play with pygame.
-```
-python -m dfp.game
-```
-
-## Docker for API
-1. Build and run docker container. (Please train your weight, google drive does not work currently due to its update.)
-```
-docker build -t tf_docker -f Dockerfile .
-docker run -d -p 1111:1111 tf_docker:latest
-docker run --gpus all -d -p 1111:1111 tf_docker:latest
-
-# special for hot reloading flask
-docker run -v ${PWD}/src/dfp/app.py:/src/dfp/app.py -v ${PWD}/src/dfp/deploy.py:/src/dfp/deploy.py -d -p 1111:1111 tf_docker:latest
-docker logs `docker ps | grep "tf_docker:latest"  | awk '{ print $1 }'` --follow
-```
-2. Call the api for output.
-```
-curl -H "Content-Type: application/json" --request POST  \
-  -d '{"uri":"https://cdn.cnn.com/cnnnext/dam/assets/200212132008-04-london-rental-market-intl-exlarge-169.jpg","colorize":1,"postprocess":0}' \
-  http://0.0.0.0:1111/uri --output /tmp/tmp.jpg
-
-
-curl --request POST -F "file=@resources/30939153.jpg" \
-  -F "postprocess=0" -F "colorize=0" http://0.0.0.0:1111/upload --output out.jpg
-```
-3. If you run `app.py` without docker, the second curl for file upload will not work.
-
-
-## Google Colab
-1. Click on [<img src="https://colab.research.google.com/assets/colab-badge.svg" >](https://colab.research.google.com/github/zcemycl/TF2DeepFloorplan/blob/master/deepfloorplan.ipynb) and authorize access.
-2. Run the first 2 code cells for installation.
-3. Go to Runtime Tab, click on Restart runtime. This ensures the packages installed are enabled.
-4. Run the rest of the notebook.
-
-## How to Contribute?
-1. Git clone this repo.
-2. Install required packages and pre-commit-hooks.
-```
-pip install -e .[tfgpu,api,dev,testing,linting]
-pre-commit install
-pre-commit run
-pre-commit run --all-files
-# pre-commit uninstall/ pip uninstall pre-commit
-```
-3. Create issues. Maintainer will decide if it requires branch. If so,
-```
-git fetch origin
-git checkout xx-features
-```
-4. Stage your files, Commit and Push to branch.
-5. After pull and merge requests, the issue is solved and the branch is deleted. You can,
-```
-git checkout main
-git pull
-git remote prune origin
-git branch -d xx-features
-```
-
 
 ## Results
 - From `train.py` and `tensorboard`.
