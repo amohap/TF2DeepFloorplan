@@ -9,8 +9,6 @@ from tensorflow.keras.models import Model
 
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
-# print('Is gpu available: ',tf.test.is_gpu_available());
-
 
 def conv2d(
     dim: int,
@@ -262,10 +260,11 @@ class deepfurnfloorplanModel(Model):
         self.config = config
 
         if config.activities:
+            # dilated convolution sequence
             self.activity_pipeline = tf.keras.Sequential([
-                conv2d(16, size=3, rate=2, act="relu"),  # Dilated convolution
-                conv2d(32, size=3, rate=2, act="relu"),  # Dilated convolution
-                conv2d(64, size=3, rate=2, act="relu"),  # Dilated convolution
+                conv2d(16, size=3, rate=2, act="relu"),
+                conv2d(32, size=3, rate=2, act="relu"),
+                conv2d(64, size=3, rate=2, act="relu"),
                 tf.keras.layers.MaxPool2D(pool_size=(32, 32)) 
             ])
 
@@ -385,13 +384,13 @@ class deepfurnfloorplanModel(Model):
     def get_config(self):
         config = super().get_config()
         config.update({
-            'config': vars(self.config)  # convert Namespace to dict for serialization
+            'config': vars(self.config) 
         })
         return config
 
     @classmethod
     def from_config(cls, config):
-        config['config'] = argparse.Namespace(**config['config'])  # convert dict back to Namespace
+        config['config'] = argparse.Namespace(**config['config']) 
         return cls(**config)
 
     def _vgg16init(self):
@@ -449,7 +448,7 @@ class deepfurnfloorplanModel(Model):
         return out
 
     def call(self, x: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        image = x[..., :3]  # original image channels
+        image = x[..., :3]
         if self.config.activities:
             activities = x[..., 3:]
             activities = self.activity_pipeline(activities)
@@ -462,7 +461,7 @@ class deepfurnfloorplanModel(Model):
                 features.append(feature)
         
         # room boundary
-        x = tf.identity(feature) # create a copy of feature tensor
+        x = tf.identity(feature)
         features = features[::-1]
         featuresrbp = []
         for i in range(len(self.rbpups)):
@@ -474,7 +473,7 @@ class deepfurnfloorplanModel(Model):
         )
 
         # room type
-        # Concatenate the vgg16 output and the activity pipeline output
+        # concatenate vgg16 output and activity pipeline output
         if self.config.activities:
             x = tf.concat([tf.identity(feature), activities], axis=-1)
         else:
@@ -496,13 +495,14 @@ class deepfurnfloorplanModel(Model):
             else:
                 x = tf.identity(feature) 
             
-            # comment out if context module is used
+            # comment out if context module is not used
             #featuresftp = []
             for i in range(len(self.ftpups)):
                 x = self.ftpups[i](x) + self.ftpcv1[i](features[i + 1])
                 x = self.ftpcv2[i](x)
-                # comment out if context module is used
+                # comment out if context module is not used
                 #featuresftp.append(x)
+                # comment following line if context module is not used
                 x = self.non_local_context(featuresrbp[i], x, i)
             logits_f = tf.keras.backend.resize_images(
                 self.ftpfinal(x), 2, 2, "channels_last"

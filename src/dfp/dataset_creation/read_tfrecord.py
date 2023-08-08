@@ -1,5 +1,5 @@
 """
-Please prepare the raw image datas save to one folder, 
+Prepare the raw image datas save to one folder, 
 makesure the path is match to the train_file/test_file.
 """
 from tf_record import *
@@ -9,7 +9,7 @@ from tf_record import *
 if __name__ == '__main__':
 	
     # read from TFRecord
-    loader_list = read_record_act_furn('/media/amohap/Crucial \X8/dataset/Structured3D_TF2Deep/tf2deep_act_furn_train.tfrecords')
+    loader_list = read_record_act_furn('tf2deep_act_furn_train.tfrecords')
 
 
     images = loader_list['images']

@@ -1,20 +1,18 @@
-import numpy as np
-
-import tensorflow as tf
-
-#from scipy.misc import imread, imresize, imsave
-from PIL import Image
-
-import cv2
-from skimage.transform import resize
-from matplotlib import pyplot as plt
-from rgb_ind_convertor import *
-from tqdm import tqdm
-
+import glob
 import os
 import sys
-import glob 
 import time
+
+import cv2
+import numpy as np
+import tensorflow as tf
+from matplotlib import pyplot as plt
+#from scipy.misc import imread, imresize, imsave
+from PIL import Image
+from rgb_ind_convertor import *
+from skimage.transform import resize
+from tqdm import tqdm
+
 
 def load_raw_images(path):
 	paths = path.split('\t')
@@ -305,16 +303,12 @@ def read_seg_record(data_path, batch_size=1, size=512):
 	images, labels = tf.train.shuffle_batch([image, label_one_hot], 
 						batch_size=batch_size, capacity=batch_size*128, num_threads=1, min_after_dequeue=batch_size*32)	
 
-	# images, walls = tf.train.shuffle_batch([image, wall], 
-						# batch_size=batch_size, capacity=batch_size*128, num_threads=1, min_after_dequeue=batch_size*32)	
-
 	return {'images': images, 'labels': labels}
 
-# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- *
 # ------------------------------------------------------------------------------------------------------------------------------------- *
 # Following are only for multi-task network. Two labels(boundary and room.)
 
-def load_bd_rm_images(path):
+def load_bd_rm_images(path, debug=False):
     paths = path.split('\t')
 
     # Read images
@@ -349,16 +343,17 @@ def load_bd_rm_images(path):
     cw_ind = cw_ind.astype(np.uint8)
 
 	# debugging
-	# merge = ind2rgb(room_ind, color_map=floorplan_fuse_map)
-	# rm = ind2rgb(room_ind)
-	# bd = ind2rgb(cw_ind, color_map=floorplan_boundary_map)
-	# plt.subplot(131)
-	# plt.imshow(image)
-	# plt.subplot(132)
-	# plt.imshow(rm/256.)
-	# plt.subplot(133)
-	# plt.imshow(bd/256.)
-	# plt.show()
+    if debug:
+        merge = ind2rgb(room_ind, color_map=floorplan_fuse_map)
+        rm = ind2rgb(room_ind)
+        bd = ind2rgb(cw_ind, color_map=floorplan_boundary_map)
+        plt.subplot(131)
+        plt.imshow(image)
+        plt.subplot(132)
+        plt.imshow(rm/256.)
+        plt.subplot(133)
+        plt.imshow(bd/256.)
+        plt.show()
 
     return image, cw_ind, room_ind, d_ind
 
@@ -436,7 +431,6 @@ def load_bd_rm_act_images(path):
     return image, cw_ind, room_ind, d_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind
 
 def write_bd_rm_act_furn_record(paths, name='dataset.tfrecords'):
-## add activity images
 	writer = tf.io.TFRecordWriter(name)
 	
 	for i in tqdm(range(len(paths)), desc='Processing images', unit="image"):
@@ -462,7 +456,7 @@ def write_bd_rm_act_furn_record(paths, name='dataset.tfrecords'):
 		
 	writer.close()
 
-def load_bd_rm_act_furn_images(path):
+def load_bd_rm_act_furn_images(path, debug=False):
     paths = path.split('\t')
 
     # Read images
@@ -518,15 +512,16 @@ def load_bd_rm_act_furn_images(path):
     cw_ind = cw_ind.astype(np.uint8)
 
 	# debugging
-    # rm = ind2rgb(room_ind)
-    # furn = ind2rgb(furn_ind, floorplan_furn_map)
-    # plt.subplot(141)
-    # plt.imshow(image)
-    # plt.subplot(142)
-    # plt.imshow(rm/256.)
-    # plt.subplot(143)
-    # plt.imshow(furn/256., interpolation='None')
-    # plt.show()
+    if debug:
+        rm = ind2rgb(room_ind)
+        furn = ind2rgb(furn_ind, floorplan_furn_map)
+        plt.subplot(141)
+        plt.imshow(image)
+        plt.subplot(142)
+        plt.imshow(rm/256.)
+        plt.subplot(143)
+        plt.imshow(furn/256., interpolation='None')
+        plt.show()
 
     return image, cw_ind, room_ind, d_ind, furn_ind, act_door_ind, act_sitt_ind, act_lay_ind, act_wash_ind
 
@@ -599,7 +594,5 @@ def read_bd_rm_record(data_path, batch_size=1, size=512):
 	images, label_boundaries, label_rooms, label_doors = tf.train.shuffle_batch([image, label_boundary, label_room, door], 
 						batch_size=batch_size, capacity=batch_size*128, num_threads=1, min_after_dequeue=batch_size*32)	
 
-	# images, walls = tf.train.shuffle_batch([image, wall], 
-						# batch_size=batch_size, capacity=batch_size*128, num_threads=1, min_after_dequeue=batch_size*32)	
 
 	return {'images': images, 'label_boundaries': label_boundaries, 'label_rooms': label_rooms, 'label_doors': label_doors}

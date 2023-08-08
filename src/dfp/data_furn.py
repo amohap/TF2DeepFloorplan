@@ -1,6 +1,5 @@
-import os
 import argparse
-
+import os
 from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
@@ -134,6 +133,6 @@ def main(dataset: tf.data.Dataset):
 if __name__ == "__main__":
     config = argparse.Namespace()
     config.mode = "train"
-    config.datadir = "/local/home/amohap/data/tf2deep"
+    config.datadir = "data/tf2deep"
     dataset = loadDataset(config)
     main(dataset)

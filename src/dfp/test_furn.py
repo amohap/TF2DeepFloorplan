@@ -1,9 +1,6 @@
 import argparse
 import io
-import itertools
 import os
-#os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import re
 import sys
 from typing import List, Tuple
@@ -224,7 +221,7 @@ def test(config: argparse.Namespace):
 
     # testing loop
     for (data, scene) in tqdm(zip(list(dataset.batch(config.batchsize)), scenes)):
-        img, bound, room, furn, act_door, act_sitt, act_lay, act_wash, hb, hr, hf = preprocess(
+        img, bound, room, furn, _, _, _, _, hb, hr, hf = preprocess(
             data['image'], data['boundary'], data['room'], data['furn'], data['act_door'], data['act_sitt'], data['act_lay'], data['act_wash']
         )
         logits_r, logits_cw, logits_f, loss, loss1, loss2, loss3 = test_step(furn_bool, model, img, hr, hb, hf
@@ -319,18 +316,17 @@ def parse_args(args: List[str]) -> argparse.Namespace:
     )
     p.add_argument("--batchsize", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-4)
-    p.add_argument("--wd", type=float, default=1e-5)
     p.add_argument("--epochs", type=int, default=1000)
-    p.add_argument("--logdir", type=str, default="/local/home/amohap/data/tf2deep/test_furn_act_context_100ep/log/store")
-    p.add_argument("--modeldir", type=str, default="/local/home/amohap/data/tf2deep/test_furn_act_context_100ep/model/store")
-    p.add_argument("--datadir", type=str, default="/local/home/amohap/data/tf2deep")
-    p.add_argument("--txtdir", type=str, default="/local/home/amohap/data/tf2deep/tf2deep_activities_furn_test.txt")
+    p.add_argument("--logdir", type=str, default="log/store")
+    p.add_argument("--modeldir", type=str, default="model/store")
+    p.add_argument("--datadir", type=str, default="data/tf2deep")
+    p.add_argument("--txtdir", type=str, default="data/tf2deep/tf2deep_activities_furn_test.txt")
     p.add_argument("--mode", type=str, default="test", choices=["train", "test"])
-    p.add_argument("--weight", type=str, default="/local/home/amohap/data/tf2deep/furn_act_context_100ep/log/store/G")
+    p.add_argument("--weight", type=str, default="log/store/G")
     p.add_argument("--activities", action='store_true')
     p.add_argument("--furniture", action='store_true')
     p.add_argument("--saveimg", action='store_true')
-    p.add_argument("--saveimgdir", type=str, default="/local/home/amohap/data/tf2deep/test_furn_act_context_100ep/images")
+    p.add_argument("--saveimgdir", type=str, default="images/")
     p.add_argument("--save-tensor-interval", type=int, default=10)
     p.add_argument("--save-model-interval", type=int, default=20)
     p.add_argument("--tomlfile", type=str, default=None)

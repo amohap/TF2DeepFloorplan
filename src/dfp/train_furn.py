@@ -38,8 +38,6 @@ def init(
     os.system(f"mkdir -p {config.modeldir}")
     if config.weight:
         model.load_weights(config.weight)
-    # optim = tf.keras.optimizers.AdamW(learning_rate=config.lr,
-    #   weight_decay=config.wd)
     optim = tf.keras.optimizers.Adam(learning_rate=config.lr)
     return dataset, model, optim
 
@@ -301,11 +299,10 @@ def parse_args(args: List[str]) -> argparse.Namespace:
     )
     p.add_argument("--batchsize", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-4)
-    p.add_argument("--wd", type=float, default=1e-5)
     p.add_argument("--epochs", type=int, default=100)
-    p.add_argument("--logdir", type=str, default="/local/home/amohap/data/tf2deep/furn_act_nocontext_100ep/log/store")
-    p.add_argument("--modeldir", type=str, default="/local/home/amohap/data/tf2deep/furn_act_nocontext_100ep/model/store")
-    p.add_argument("--datadir", type=str, default="/local/home/amohap/data/tf2deep")
+    p.add_argument("--logdir", type=str, default="log/store")
+    p.add_argument("--modeldir", type=str, default="model/store")
+    p.add_argument("--datadir", type=str, default="data/tf2deep")
     p.add_argument("--mode", type=str, default="train", choices=["train", "test"])
     p.add_argument("--weight", type=str)
     p.add_argument("--activities", action='store_true')
